@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: de_postgres
+    environment:
+      POSTGRES_USER: de_user
+      POSTGRES_PASSWORD: de_pass
+      POSTGRES_DB: de_dw
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./sql/init:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+
+  airflow-webserver:
+    image: apache/airflow:2.8.3
+    container_name: airflow_webserver
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://de_user:de_pass@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+
+      # 🔑 THIS IS THE KEY FIX
+      PYTHONPATH: /opt/airflow
+
+      DW_HOST: postgres
+      DW_PORT: "5432"
+      DW_DB: de_dw
+      DW_USER: de_user
+      DW_PASSWORD: de_pass
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - ./batch_pipeline:/opt/airflow/batch_pipeline
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      pip install --no-cache-dir psycopg2-binary &&
+      airflow webserver
+      "
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.3
+    container_name: airflow_scheduler
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://de_user:de_pass@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+
+      # 🔑 THIS IS THE KEY FIX
+      PYTHONPATH: /opt/airflow
+
+      DW_HOST: postgres
+      DW_PORT: "5432"
+      DW_DB: de_dw
+      DW_USER: de_user
+      DW_PASSWORD: de_pass
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - ./batch_pipeline:/opt/airflow/batch_pipeline
+    command: >
+      bash -c "
+      pip install --no-cache-dir psycopg2-binary &&
+      airflow scheduler
+      "
+
+volumes:
+  postgres_data:
