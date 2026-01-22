@@ -1,3 +1,4 @@
+data/raw/*.csv
+postgres_data/
 __pycache__/
-**/__pycache__/
-*.pyc
+.env

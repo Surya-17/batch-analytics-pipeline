@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 from datetime import datetime
 from batch_pipeline.db import get_connection
-
+from decimal import Decimal
 
 
 EXPECTED_COLUMNS = [
@@ -45,7 +45,7 @@ def main():
                     row["status"],
                     row["payment_method"],
                     row["currency"],
-                    float(row["order_total"]),
+                    Decimal(row["order_total"]),
                     datetime.fromisoformat(row["updated_at"]),
                 )
             )
@@ -69,7 +69,6 @@ def main():
             updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (order_id) DO NOTHING;
     """
 
     cur.executemany(sql, rows)

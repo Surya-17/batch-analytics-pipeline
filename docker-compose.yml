@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   postgres:
     image: postgres:15
@@ -7,23 +9,41 @@ services:
       POSTGRES_PASSWORD: de_pass
       POSTGRES_DB: de_dw
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - ./sql/init:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
+
+  airflow-init:
+    image: apache/airflow:2.8.3
+    container_name: airflow_init
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://de_user:de_pass@postgres:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "n8f5z1QeXk5m2QzP7y0K1qW9YB7zLwKx7JH0b6FZQ3A="
+    command: >
+      bash -c "until airflow db check; do sleep 3; done &&
+               airflow db init &&
+               airflow users create --username airflow --firstname Airflow --lastname Admin --role Admin --email admin@example.com --password airflow || true"
 
   airflow-webserver:
     image: apache/airflow:2.8.3
     container_name: airflow_webserver
     depends_on:
       - postgres
+      - airflow-init
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://de_user:de_pass@postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
 
-      # 🔑 THIS IS THE KEY FIX
+      AIRFLOW__WEBSERVER__SECRET_KEY: "this-is-a-dev-secret-key"
+      AIRFLOW__CORE__FERNET_KEY: "n8f5z1QeXk5m2QzP7y0K1qW9YB7zLwKx7JH0b6FZQ3A="
+      AIRFLOW__WEBSERVER__ENABLE_CSRF: "false"
+
       PYTHONPATH: /opt/airflow
 
       DW_HOST: postgres
@@ -38,22 +58,23 @@ services:
     ports:
       - "8080:8080"
     command: >
-      bash -c "
-      pip install --no-cache-dir psycopg2-binary &&
-      airflow webserver
-      "
+      bash -c "pip install --no-cache-dir psycopg2-binary && airflow webserver"
 
   airflow-scheduler:
     image: apache/airflow:2.8.3
     container_name: airflow_scheduler
     depends_on:
       - postgres
+      - airflow-init
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://de_user:de_pass@postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
 
-      # 🔑 THIS IS THE KEY FIX
+      AIRFLOW__WEBSERVER__SECRET_KEY: "this-is-a-dev-secret-key"
+      AIRFLOW__CORE__FERNET_KEY: "n8f5z1QeXk5m2QzP7y0K1qW9YB7zLwKx7JH0b6FZQ3A="
+      AIRFLOW__WEBSERVER__ENABLE_CSRF: "false"
+
       PYTHONPATH: /opt/airflow
 
       DW_HOST: postgres
@@ -66,10 +87,7 @@ services:
       - ./data:/opt/airflow/data
       - ./batch_pipeline:/opt/airflow/batch_pipeline
     command: >
-      bash -c "
-      pip install --no-cache-dir psycopg2-binary &&
-      airflow scheduler
-      "
+      bash -c "pip install --no-cache-dir psycopg2-binary && airflow scheduler"
 
 volumes:
   postgres_data:
